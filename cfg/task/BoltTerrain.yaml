@@ -70,20 +70,13 @@ env:
     decimation: 4
 
   defaultJointAngles: # = target angles when action = 0.0
-    FL_HAA: 0.05 # [rad]
-    HL_HAA: 0.05 # [rad]
-    FR_HAA: -0.05 # [rad]
-    HR_HAA: -0.05 # [rad]
+    FL_HAA: 0.0 # [rad]
+    FL_HFE: 0.8 # [rad]
+    FL_KFE: -1.7 # [rad]
 
-    FL_HFE: 0.4 # [rad]
-    HL_HFE: 0.4 # [rad]
-    FR_HFE: 0.4 # [rad]
-    HR_HFE: 0.4 # [rad]
-
-    FL_KFE: -0.8 # [rad]
-    HL_KFE: -0.8 # [rad]
-    FR_KFE: -0.8 # [rad]
-    HR_KFE: -0.8 # [rad]
+    FR_HAA: 0.0 # [rad]
+    FR_HFE: 0.8 # [rad]
+    FR_KFE: -1.7 # [rad]
 
   urdfAsset:
     file: "bolt/bolt.urdf"
