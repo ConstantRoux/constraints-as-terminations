@@ -5,7 +5,7 @@ physics_engine: "physx"
 
 env:
   numEnvs: ${resolve_default:4096,${...num_envs}}
-  numActions: 12
+  numActions: 6
   numLatent: 0 # (8, 3, 3)
   numHistorySamples: 1 # t-1, t-4, t-7
   numHistoryStep: 0 # t-1 -> t-4 -> t-7
@@ -56,7 +56,7 @@ env:
 
   randomCommandVelocityRanges:
     # train
-    linear_x: [-0.3, 1.0] # min max [m/s]
+    linear_x: [-1.0, 1.0] # min max [m/s]
     linear_y: [-0.7, 0.7] # min max [m/s]
     yaw: [-0.78, 0.78] # min max [rad/s]
 
@@ -144,12 +144,12 @@ env:
     # Other
     flatTerrainThreshold: 0.001
     vel_deadzone: 0.1
-    base_height_target: 0.245
-    gait_period: 0.4
+    base_height_target: 0.31
+    gait_period: 0.3
 
     # observations
     observe:
-      base_lin_vel: false
+      base_lin_vel: true
       base_ang_vel: true
       commands: true
       misc: true

@@ -219,12 +219,12 @@ class BoltTerrain(VecTask):
         self.forward_vec = to_torch([1., 0., 0.], device=self.device).repeat((self.num_envs, 1))
         self.torques = torch.zeros(self.num_envs, self.num_actions, dtype=torch.float, device=self.device, requires_grad=False)
         self.actions = torch.zeros(self.num_envs, self.num_actions, dtype=torch.float, device=self.device, requires_grad=False)
-        self.phases = torch.zeros(self.num_envs, 4, dtype=torch.float, device=self.device, requires_grad=False)
+        self.phases = torch.zeros(self.num_envs, len(self.feet_indices), dtype=torch.float, device=self.device, requires_grad=False)
         self.contacts_filt = torch.zeros(self.num_envs, len(self.feet_indices), dtype=torch.bool, device=self.device, requires_grad=False)
         self.contacts_last = torch.zeros(self.num_envs, len(self.feet_indices), dtype=torch.bool, device=self.device, requires_grad=False)
         self.contacts_touchdown = torch.zeros(self.num_envs, len(self.feet_indices), dtype=torch.bool, device=self.device, requires_grad=False)
-        self.feet_gait_time = torch.zeros(self.num_envs, 4, dtype=torch.float, device=self.device, requires_grad=False)
-        self.feet_swing_time = torch.zeros(self.num_envs, 4, dtype=torch.float, device=self.device, requires_grad=False)
+        self.feet_gait_time = torch.zeros(self.num_envs, len(self.feet_indices), dtype=torch.float, device=self.device, requires_grad=False)
+        self.feet_swing_time = torch.zeros(self.num_envs, len(self.feet_indices), dtype=torch.float, device=self.device, requires_grad=False)
         self.feet_swing_apex = torch.zeros(self.num_envs, len(self.feet_indices), dtype=torch.float, device=self.device, requires_grad=False)
         self.feet_clearance = torch.zeros(self.num_envs, len(self.feet_indices), dtype=torch.float, device=self.device, requires_grad=False)
         self.feet_clearance_cstr = torch.zeros(self.num_envs, len(self.feet_indices), dtype=torch.bool, device=self.device, requires_grad=False)
@@ -233,7 +233,7 @@ class BoltTerrain(VecTask):
         self.base_pos = torch.zeros((self.num_envs, 3), dtype=torch.float, device=self.device, requires_grad=False)
         self.base_quat = torch.zeros((self.num_envs, 4), dtype=torch.float, device=self.device, requires_grad=False)
         self.base_quat[:, 3] = 1.0
-        self.filtered_contact_forces = torch.zeros((self.num_envs, 4, 3, 5), dtype=torch.float, device=self.device, requires_grad=False)
+        self.filtered_contact_forces = torch.zeros((self.num_envs, len(self.feet_indices), 3, 5), dtype=torch.float, device=self.device, requires_grad=False)
         self.move_up_flag = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device, requires_grad=False)
         self.camera_pos = np.zeros(3)
 
@@ -244,16 +244,16 @@ class BoltTerrain(VecTask):
 
         # Initialize logging tensors, only log quantities of the first environment so no need for self.num_envs
         if self.debug_plots:
-            self.log_feet_positions = torch.zeros(self.max_episode_length * self.decimation, 4, 3, dtype=torch.float, device=self.device, requires_grad=False)
-            self.log_feet_velocities = torch.zeros(self.max_episode_length * self.decimation, 4, 3, dtype=torch.float, device=self.device, requires_grad=False)
-            self.log_feet_ctc_forces = torch.zeros(self.max_episode_length, 4, 3, dtype=torch.float, device=self.device, requires_grad=False)
-            self.log_dof_pos = torch.zeros(self.max_episode_length * self.decimation, 12, dtype=torch.float, device=self.device, requires_grad=False)
-            self.log_dof_pos_cmd = torch.zeros(self.max_episode_length * self.decimation, 12, dtype=torch.float, device=self.device, requires_grad=False)
-            self.log_dof_vel = torch.zeros(self.max_episode_length * self.decimation, 12, dtype=torch.float, device=self.device, requires_grad=False)
-            self.log_torques = torch.zeros(self.max_episode_length * self.decimation, 12, dtype=torch.float, device=self.device, requires_grad=False)
-            self.log_action_rate = torch.zeros(self.max_episode_length * self.decimation, 12, dtype=torch.float, device=self.device, requires_grad=False)
+            self.log_feet_positions = torch.zeros(self.max_episode_length * self.decimation, len(self.feet_indices), 3, dtype=torch.float, device=self.device, requires_grad=False)
+            self.log_feet_velocities = torch.zeros(self.max_episode_length * self.decimation, len(self.feet_indices), 3, dtype=torch.float, device=self.device, requires_grad=False)
+            self.log_feet_ctc_forces = torch.zeros(self.max_episode_length, len(self.feet_indices), 3, dtype=torch.float, device=self.device, requires_grad=False)
+            self.log_dof_pos = torch.zeros(self.max_episode_length * self.decimation, self.num_dof, dtype=torch.float, device=self.device, requires_grad=False)
+            self.log_dof_pos_cmd = torch.zeros(self.max_episode_length * self.decimation, self.num_dof, dtype=torch.float, device=self.device, requires_grad=False)
+            self.log_dof_vel = torch.zeros(self.max_episode_length * self.decimation, self.num_dof, dtype=torch.float, device=self.device, requires_grad=False)
+            self.log_torques = torch.zeros(self.max_episode_length * self.decimation, self.num_dof, dtype=torch.float, device=self.device, requires_grad=False)
+            self.log_action_rate = torch.zeros(self.max_episode_length * self.decimation, self.num_dof, dtype=torch.float, device=self.device, requires_grad=False)
             self.log_base_vel = torch.zeros(self.max_episode_length * self.decimation, 6, dtype=torch.float, device=self.device, requires_grad=False)
-            self.log_trajectory = torch.zeros(self.max_episode_length * self.decimation, 19, dtype=torch.float, device=self.device, requires_grad=False)
+            self.log_trajectory = torch.zeros(self.max_episode_length * self.decimation, self.num_dof + 7, dtype=torch.float, device=self.device, requires_grad=False)
 
         # Default joint positions to which the joint position offsets (actions) are added
         self.default_dof_pos = torch.zeros_like(self.dof_pos, dtype=torch.float, device=self.device, requires_grad=False)
@@ -585,7 +585,7 @@ class BoltTerrain(VecTask):
 
     def dim_obs_misc(self):
         """Dimension of miscellaneous observations."""
-        return 39 # 123
+        return 3 + 3 * 6
 
     def dim_obs_heights(self):
         """Dimension of height scan observations."""
@@ -593,7 +593,7 @@ class BoltTerrain(VecTask):
 
     def dim_obs_phases(self):
         """Dimension of phases observations."""
-        return 8
+        return 4
 
     def dim_obs_imu(self):
         """Dimension of IMU observations."""
@@ -655,16 +655,17 @@ class BoltTerrain(VecTask):
     def noise_misc(self):
         """Noise for misc quantities."""
         return torch.cat((self.cfg["env"]["learn"]["gravityNoise"] * torch.ones(3, dtype=torch.float, device=self.device, requires_grad=False),
-                          self.cfg["env"]["learn"]["dofPositionNoise"] * self.dof_pos_scale * torch.ones(12, dtype=torch.float, device=self.device, requires_grad=False),
-                          self.cfg["env"]["learn"]["dofVelocityNoise"] * self.dof_vel_scale * torch.ones(12, dtype=torch.float, device=self.device, requires_grad=False),
-                          torch.zeros(12, dtype=torch.float, device=self.device, requires_grad=False),
+                          self.cfg["env"]["learn"]["dofPositionNoise"] * self.dof_pos_scale * torch.ones(self.num_dof, dtype=torch.float, device=self.device, requires_grad=False),
+                          self.cfg["env"]["learn"]["dofVelocityNoise"] * self.dof_vel_scale * torch.ones(self.num_dof, dtype=torch.float, device=self.device, requires_grad=False),
+                          torch.zeros(self.num_dof, dtype=torch.float, device=self.device, requires_grad=False),
                           ), dim=-1)
-        return torch.cat((self.cfg["env"]["learn"]["gravityNoise"] * torch.ones(3, dtype=torch.float, device=self.device, requires_grad=False),
-                          self.cfg["env"]["learn"]["dofPositionNoise"] * self.dof_pos_scale * torch.ones(12, dtype=torch.float, device=self.device, requires_grad=False),
-                          torch.zeros(36, dtype=torch.float, device=self.device, requires_grad=False),
-                          self.cfg["env"]["learn"]["dofVelocityNoise"] * self.dof_vel_scale * torch.ones(12, dtype=torch.float, device=self.device, requires_grad=False),
-                          torch.zeros(36 + 24, dtype=torch.float, device=self.device, requires_grad=False),
-                          ), dim=-1)
+
+        # return torch.cat((self.cfg["env"]["learn"]["gravityNoise"] * torch.ones(3, dtype=torch.float, device=self.device, requires_grad=False),
+        #                   self.cfg["env"]["learn"]["dofPositionNoise"] * self.dof_pos_scale * torch.ones(self.num_dof, dtype=torch.float, device=self.device, requires_grad=False),
+        #                   torch.zeros(36, dtype=torch.float, device=self.device, requires_grad=False),
+        #                   self.cfg["env"]["learn"]["dofVelocityNoise"] * self.dof_vel_scale * torch.ones(self.num_dof, dtype=torch.float, device=self.device, requires_grad=False),
+        #                   torch.zeros(36 + 24, dtype=torch.float, device=self.device, requires_grad=False),
+        #                   ), dim=-1)
 
     def noise_heights(self):
         """Noise for height of surrounding terrain."""
@@ -720,94 +721,6 @@ class BoltTerrain(VecTask):
         self.episode_sums["air_time"] += rew_airTime
         self.episode_sums["foot2contact"] += rew_foot2contact
 
-    def compute_reward(self):
-        """Compute and stack various rewards for base velocity tracking."""
-
-        # Velocity tracking reward
-        lin_vel_error = torch.sum(torch.square(self.commands[:, :2] - self.base_lin_vel[:, :2]), dim=1)
-        ang_vel_error = torch.square(self.commands[:, 2] - self.base_ang_vel[:, 2])
-        rew_lin_vel_xy = torch.exp(-lin_vel_error / self.lin_vel_delta) * self.rew_scales["lin_vel_xy"]
-        rew_ang_vel_z = torch.exp(-ang_vel_error / self.ang_vel_delta) * self.rew_scales["ang_vel_z"]
-
-        # Other base velocity penalties
-        rew_lin_vel_z = torch.square(self.base_lin_vel[:, 2]) * self.rew_scales["lin_vel_z"]
-        rew_ang_vel_xy = torch.sum(torch.square(self.base_ang_vel[:, :2]), dim=1) * self.rew_scales["ang_vel_xy"]
-
-        # Orientation penalty
-        rew_orient = torch.sum(torch.square(self.projected_gravity[:, :2]), dim=1) * self.rew_scales["orient"]
-
-        # Base height penalty
-        rew_base_height = torch.square(self.root_states[:, 2] - self.base_height_target) * self.rew_scales["base_height"]
-
-        # Torque regularization
-        rew_torque = torch.sum(torch.square(self.torques), dim=1) * self.rew_scales["torque"]
-
-        # Joint acc regularization
-        rew_joint_acc = torch.sum(torch.square(self.diff_dof_vel - self.last_dof_vel[:, :, 0]), dim=1) * self.rew_scales["joint_acc"]
-
-        # Collision penalty
-        knee_contact = torch.norm(self.contact_forces[:, self.knee_indices, :], dim=2) > 1.
-        rew_collision = torch.sum(knee_contact, dim=1) * self.rew_scales["collision"] # sum vs any ?
-
-        # Stumbling penalty
-        stumble = (torch.norm(self.contact_forces[:, self.grf_indices, :2], dim=2) > 5.) * (torch.abs(self.contact_forces[:, self.grf_indices, 2]) < 1.)
-        rew_stumble = torch.sum(stumble, dim=1) * self.rew_scales["stumble"]
-
-        # Action rate regularization
-        rew_action_rate = torch.sum(torch.square(self.actions - self.last_actions[:, :, 0]) + 
-                                    torch.square(self.actions - 2 * self.last_actions[:, :, 0] + self.last_actions[:, :, 1]),
-                                    dim=1) * (self.action_scale**2) * self.rew_scales["action_rate"]
-
-        # Deviation from initial pose regularization
-        rew_dof_pos = torch.sum(torch.square(self.dof_pos - self.default_dof_pos), dim=1) * self.rew_scales["dof_pos"]
-        # rew_dof_pos *= torch.norm(self.commands[:, :3], dim=1) < self.vel_deadzone
-
-        # Feet air time reward
-        rew_airTime = torch.sum((self.feet_swing_time - 0.25) * self.contacts_touchdown, dim=1) * self.rew_scales["air_time"] # reward only on first contact with the ground
-        rew_airTime *= torch.norm(self.commands[:, :3], dim=1) > self.vel_deadzone # no reward for zero command
-
-        # Penalize dof velocities over the limit
-        # clip to max error = 1 rad/s per joint to avoid huge penalties
-        rew_dof_vel_limit = torch.sum((torch.abs(self.diff_dof_vel) - 12).clip(min=0.0, max=1.0), dim=1) * self.rew_scales["dof_vel_limit"]
-
-        # Cosmetic penalty for hip motion
-        rew_hip = torch.sum(torch.abs(self.dof_pos[:, [0, 3, 6, 9]] - self.default_dof_pos[:, [0, 3, 6, 9]]), dim=1)* self.rew_scales["hip"]
-
-        # Non-moving static gait
-        # static = ~torch.any(torch.abs(self.commands[:, :3]) > self.vel_deadzone, dim=1)
-        # rew_dof_pos *= static
-
-        # rew_torque[static] *= 100
-        # rew_action_rate[static] *= 200
-
-        # Total reward, with clipping if < 0
-        self.rew_buf = rew_lin_vel_xy + rew_ang_vel_z + rew_lin_vel_z + rew_ang_vel_xy + rew_orient + rew_base_height +\
-                    rew_torque + rew_joint_acc + rew_collision + rew_action_rate + rew_dof_pos + rew_airTime + rew_hip +\
-                    rew_stumble + rew_dof_vel_limit
-        self.rew_buf = torch.clip(self.rew_buf, min=0., max=None)
-
-        # Add termination reward
-        self.rew_buf += self.rew_scales["termination"] * self.reset_buf * ~self.timeout_buf
-
-        # Saving the cumulative sum of rewards over the episodes
-        self.episode_sums["lin_vel_xy"] += rew_lin_vel_xy
-        self.episode_sums["ang_vel_z"] += rew_ang_vel_z
-        self.episode_sums["lin_vel_z"] += rew_lin_vel_z
-        self.episode_sums["ang_vel_xy"] += rew_ang_vel_xy
-        self.episode_sums["torques"] += rew_torque
-        self.episode_sums["action_rate"] += rew_action_rate
-        self.episode_sums["collision"] += rew_collision
-        self.episode_sums["stumble"] += rew_stumble
-
-        """self.episode_sums["orient"] += rew_orient
-        self.episode_sums["joint_acc"] += rew_joint_acc
-        self.episode_sums["stumble"] += rew_stumble
-        self.episode_sums["dof_pos"] += rew_dof_pos
-        self.episode_sums["dof_vel_limit"] += rew_dof_vel_limit
-        self.episode_sums["air_time"] += rew_airTime
-        self.episode_sums["base_height"] += rew_base_height
-        self.episode_sums["hip"] += rew_hip"""
-
     ####################
     # CaT Constraints
     ####################
@@ -817,7 +730,6 @@ class BoltTerrain(VecTask):
         handed out to a constraint manager (ConstraintManager class) that will compute termination probabilities."""
 
         # ------------ Soft constraints ----------------
-
         # Torque constraint
         cstr_torque = torch.abs(self.torques) - self.limits["torque"]
 
@@ -860,7 +772,7 @@ class BoltTerrain(VecTask):
         # ------------ Style constraints ----------------
 
         # Hip constraint (style constraint on HAA joint)
-        cstr_HAA = torch.abs(self.dof_pos[:, [0, 3, 6, 9]] - self.default_dof_pos[:, [0, 3, 6, 9]]) - self.limits["HAA"]
+        cstr_HAA = torch.abs(self.dof_pos[:, [0, 3]] - self.default_dof_pos[:, [0, 3]]) - self.limits["HAA"]
         cstr_HAA *= (torch.abs(self.commands[:, 1]) < 0.1).float().unsqueeze(1) # only constraint the hips when going straight forward
 
         # Base orientation constraint (style constraint on roll/pitch angles)
@@ -870,17 +782,18 @@ class BoltTerrain(VecTask):
         cstr_air_time = (self.constraints["air_time"] - self.feet_swing_time) * self.contacts_touchdown * (torch.norm(self.commands[:, :3], dim=1) > self.vel_deadzone).float().unsqueeze(1)
 
         # Constraint to stand still when the velocity command is 0 (style constraint)
-        cstr_nomove = (torch.abs(self.dof_vel) - 4.0) *(torch.norm(self.commands[:, :3], dim=1) < self.vel_deadzone).float().unsqueeze(1)
+        # cstr_nomove = (torch.abs(self.dof_vel) - 4.0) *(torch.norm(self.commands[:, :3], dim=1) < self.vel_deadzone).float().unsqueeze(1)
 
         # Constraint to have exactly 2 feet in contact with the ground at any time when walking (style constraint)
-        cstr_2footcontact = torch.abs((self.contact_forces[:, self.grf_indices, 2] > 1.0).sum(1) - 2) * (torch.norm(self.commands[:, :3], dim=1) > 0.5).float()
+        # cstr_1footcontact = torch.abs((self.contact_forces[:, self.grf_indices, 2] > 1.0).sum(1) - 1) * (torch.norm(self.commands[:, :3], dim=1) > 0.5).float()
+        cstr_1footcontact = torch.abs((self.contact_forces[:, self.grf_indices, 2] > 1.0).sum(1) - 1).float()
 
         # Apply aesthetics constraints only on flat terrains
         cstr_HAA *= self.is_flat_terrain.unsqueeze(1)
         cstr_base_orientation *= self.is_flat_terrain
         cstr_air_time *= self.is_flat_terrain.unsqueeze(1)
-        cstr_2footcontact *= self.is_flat_terrain
-        cstr_nomove *= self.is_flat_terrain.unsqueeze(1)
+        cstr_1footcontact *= self.is_flat_terrain
+        # cstr_nomove *= self.is_flat_terrain.unsqueeze(1)
 
         # ------------ Tracking constraints ----------------
 
@@ -917,14 +830,14 @@ class BoltTerrain(VecTask):
         self.cstr_manager.add("base_contact", cstr_base_contact, max_p=1.0)
         self.cstr_manager.add("foot_contact", cstr_foot_contact, max_p=1.0)
         self.cstr_manager.add("HFE", cstr_HFE, max_p=1.0)
+        self.cstr_manager.add("HAA", cstr_HAA, max_p=1.0)
         self.cstr_manager.add("upsidedown", cstr_upsidedown, max_p=1.0)
 
         # Style constraints
-        self.cstr_manager.add("HAA", cstr_HAA, max_p=soft_p)
         self.cstr_manager.add("base_ori", cstr_base_orientation, max_p=soft_p)
         self.cstr_manager.add("air_time", cstr_air_time, max_p=soft_p)
-        self.cstr_manager.add("no_move", cstr_nomove)
-        self.cstr_manager.add("2footcontact", cstr_2footcontact, max_p=soft_p)
+        # self.cstr_manager.add("no_move", cstr_nomove)
+        self.cstr_manager.add("1footcontact", cstr_1footcontact, max_p=soft_p)
 
         # Tracking constraints
         self.cstr_manager.add("lin_vel",cstr_lin_vel, max_p=soft_p)
@@ -1469,8 +1382,8 @@ class BoltTerrain(VecTask):
 
         # Display feet contact forces along Z in world frame
         plt.figure(figsize=(20, 12))
-        lbl = ["FL", "FR", "HL", "HR"]
-        for k in range(4):
+        lbl = ["FL", "FR"]
+        for k in range(len(self.feet_indices)):
             plt.plot(self.dt * np.linspace(1 + N, self.max_episode_length - N, self.max_episode_length - 2 * N),
                         self.log_feet_ctc_forces[N:-N, k, 2].cpu().numpy(), label=lbl[k])
         plt.legend()
@@ -1479,8 +1392,8 @@ class BoltTerrain(VecTask):
 
         # Display feet velocities in world frame
         plt.figure(figsize=(20, 12))
-        lbl = ["FL", "FR", "HL", "HR"]
-        for k in range(4):
+        lbl = ["FL", "FR"]
+        for k in range(len(self.feet_indices)):
             plt.plot(self.dt * np.linspace(1 + N, self.max_episode_length - N, self.max_episode_length * self.decimation - 2 * N),
                         self.log_feet_velocities[N:-N, k, 2].cpu().numpy(), label=lbl[k])
         plt.legend()
@@ -1489,8 +1402,8 @@ class BoltTerrain(VecTask):
 
         # Display feet positions in world frame
         plt.figure(figsize=(20, 12))
-        lbl = ["FL", "FR", "HL", "HR"]
-        for k in range(4):
+        lbl = ["FL", "FR"]
+        for k in range(len(self.feet_indices)):
             plt.plot(self.dt * np.linspace(1 + N, self.max_episode_length - N, self.max_episode_length * self.decimation - 2 * N),
                         self.log_feet_positions[N:-N, k, 2].cpu().numpy(), label=lbl[k])
         plt.legend()
@@ -1527,7 +1440,7 @@ class BoltTerrain(VecTask):
 
         # Display joint positions
         lgd1 = ["HAA", "HFE", "Knee"]
-        lgd2 = ["FL", "FR", "HL", "HR"]
+        lgd2 = ["FL", "FR"]
         fig, axs = plt.subplots(3, 4, figsize=(20, 12), sharex=True)
         for i in range(12):
             axs[i % 3, int(i / 3)].plot(
@@ -1558,7 +1471,7 @@ class BoltTerrain(VecTask):
 
         # Display joint velocities
         lgd1 = ["HAA", "HFE", "Knee"]
-        lgd2 = ["FL", "FR", "HL", "HR"]
+        lgd2 = ["FL", "FR"]
         fig, axs = plt.subplots(3, 4, figsize=(20, 12), sharex=True)
         for i in range(12):
             axs[i % 3, int(i / 3)].plot(
@@ -1581,7 +1494,7 @@ class BoltTerrain(VecTask):
 
         # Display joint torques
         lgd1 = ["HAA", "HFE", "Knee"]
-        lgd2 = ["FL", "FR", "HL", "HR"]
+        lgd2 = ["FL", "FR"]
         fig, axs = plt.subplots(3, 4, figsize=(20, 12), sharex=True)
         for i in range(12):
             axs[i % 3, int(i / 3)].plot(
@@ -1623,7 +1536,7 @@ class BoltTerrain(VecTask):
 
         # Display action rate
         lgd1 = ["HAA", "HFE", "Knee"]
-        lgd2 = ["FL", "FR", "HL", "HR"]
+        lgd2 = ["FL", "FR"]
         fig, axs = plt.subplots(3, 4, figsize=(20, 12), sharex=True)
         for i in range(12):
             axs[i % 3, int(i / 3)].plot(
@@ -1645,44 +1558,44 @@ class BoltTerrain(VecTask):
         plt.tight_layout()
         if savefigs: plt.savefig(self.checkpoint_name + "_action_rate.png")
 
-        # Display joint torques (only HFE and Knee of FR and HL legs)
-        lgd1 = ["HFE", "Knee"]
-        lgd2 = ["FR", "HL"]
-        fig, axs = plt.subplots(2, 2, figsize=(20, 12), sharex=True)
-        P = (self.Kp * (self.log_dof_pos_cmd[N:-N, [4, 5, 7, 8]] - self.log_dof_pos[N:-N, [4, 5, 7, 8]])).cpu().numpy()
-        D = (- self.Kd * self.log_dof_vel[N:-N, [4, 5, 7, 8]]).cpu().numpy()
-        PD = P + D
-        for i in range(4):
-            axs[i % 2, int(i / 2)].plot(
-                self.dt * np.linspace(1 + N, self.max_episode_length - N, self.max_episode_length * self.decimation - 2 * N),
-                P[:, i],
-                linestyle="-",
-                label="P",
-            )
-            axs[i % 2, int(i / 2)].plot(
-                self.dt * np.linspace(1 + N, self.max_episode_length - N, self.max_episode_length * self.decimation - 2 * N),
-                D[:, i],
-                linestyle="-",
-                label="D",
-            )
-            axs[i % 2, int(i / 2)].plot(
-                self.dt * np.linspace(1 + N, self.max_episode_length - N, self.max_episode_length * self.decimation - 2 * N),
-                PD[:, i],
-                linestyle="-",
-                label="PD",
-            )
+        # # Display joint torques (only HFE and Knee of FR and HL legs)
+        # lgd1 = ["HFE", "Knee"]
+        # lgd2 = ["FR", "HL"]
+        # fig, axs = plt.subplots(2, 2, figsize=(20, 12), sharex=True)
+        # P = (self.Kp * (self.log_dof_pos_cmd[N:-N, [4, 5, 7, 8]] - self.log_dof_pos[N:-N, [4, 5, 7, 8]])).cpu().numpy()
+        # D = (- self.Kd * self.log_dof_vel[N:-N, [4, 5, 7, 8]]).cpu().numpy()
+        # PD = P + D
+        # for i in range(4):
+        #     axs[i % 2, int(i / 2)].plot(
+        #         self.dt * np.linspace(1 + N, self.max_episode_length - N, self.max_episode_length * self.decimation - 2 * N),
+        #         P[:, i],
+        #         linestyle="-",
+        #         label="P",
+        #     )
+        #     axs[i % 2, int(i / 2)].plot(
+        #         self.dt * np.linspace(1 + N, self.max_episode_length - N, self.max_episode_length * self.decimation - 2 * N),
+        #         D[:, i],
+        #         linestyle="-",
+        #         label="D",
+        #     )
+        #     axs[i % 2, int(i / 2)].plot(
+        #         self.dt * np.linspace(1 + N, self.max_episode_length - N, self.max_episode_length * self.decimation - 2 * N),
+        #         PD[:, i],
+        #         linestyle="-",
+        #         label="PD",
+        #     )
 
-            axs[i % 2, int(i / 2)].set_title("Joint Torques")
-            axs[i % 2, int(i / 2)].set_xlabel("Time [s]")
-            axs[i % 2, int(i / 2)].set_ylabel(
-                lgd1[i % 2] + " " + lgd2[int(i / 2)] + " [Nm]"
-            )
-            axs[i % 2, int(i / 2)].grid(True)
-        plt.legend()
-        plt.xlim([0.0, t_end])
-        plt.grid(True)
-        plt.tight_layout()
-        if savefigs: plt.savefig(self.checkpoint_name + "_torques_duo.png")
+        #     axs[i % 2, int(i / 2)].set_title("Joint Torques")
+        #     axs[i % 2, int(i / 2)].set_xlabel("Time [s]")
+        #     axs[i % 2, int(i / 2)].set_ylabel(
+        #         lgd1[i % 2] + " " + lgd2[int(i / 2)] + " [Nm]"
+        #     )
+        #     axs[i % 2, int(i / 2)].grid(True)
+        # plt.legend()
+        # plt.xlim([0.0, t_end])
+        # plt.grid(True)
+        # plt.tight_layout()
+        # if savefigs: plt.savefig(self.checkpoint_name + "_torques_duo.png")
 
         # Save base position and orientation in world frame
         np.save(self.checkpoint_name + "_trajectory.npy", self.log_trajectory.cpu().numpy())
