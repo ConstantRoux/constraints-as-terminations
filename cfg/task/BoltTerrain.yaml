@@ -149,7 +149,7 @@ env:
 
     # observations
     observe:
-      base_lin_vel: true
+      base_lin_vel: false
       base_ang_vel: true
       commands: true
       misc: true

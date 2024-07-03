@@ -824,13 +824,13 @@ class BoltTerrain(VecTask):
         self.cstr_manager.add("joint_vel",  cstr_joint_vel, max_p=soft_p)
         self.cstr_manager.add("base_height_max", cstr_base_height_max, max_p=soft_p)
         self.cstr_manager.add("action_rate",cstr_action_rate, max_p=soft_p)
+        self.cstr_manager.add("HFE", cstr_HFE, max_p=soft_p)
+        self.cstr_manager.add("HAA", cstr_HAA, max_p=soft_p)
 
         # Hard constraints
         self.cstr_manager.add("knee_contact", cstr_knee_contact, max_p=1.0)
         self.cstr_manager.add("base_contact", cstr_base_contact, max_p=1.0)
         self.cstr_manager.add("foot_contact", cstr_foot_contact, max_p=1.0)
-        self.cstr_manager.add("HFE", cstr_HFE, max_p=1.0)
-        self.cstr_manager.add("HAA", cstr_HAA, max_p=1.0)
         self.cstr_manager.add("upsidedown", cstr_upsidedown, max_p=1.0)
 
         # Style constraints
@@ -860,6 +860,8 @@ class BoltTerrain(VecTask):
         else:
             self.reset_env_buf = timeout | cstr_base_contact | cstr_upsidedown
 
+        self.extras["true_dones"] = self.reset_env_buf
+        
     ####################
     # Other
     ####################
