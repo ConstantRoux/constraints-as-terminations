@@ -1,4 +1,5 @@
 videos
+video.mp4
 /isaacgymenvs/logs
 *train_dir*
 *wandb*
