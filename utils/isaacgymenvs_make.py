@@ -37,11 +37,10 @@ from hydra import compose, initialize
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig
 from isaacgymenvs.utils.reformat import omegaconf_to_dict
-from tasks.solo_terrain import SoloTerrain
 from tasks.bolt_terrain import BoltTerrain
 from tasks.bolt_terrain_render import BoltTerrainRender
 
-isaacgym_task_map = {"SoloTerrain": SoloTerrain, "BoltTerrain": BoltTerrain, "BoltTerrainRender": BoltTerrainRender}
+isaacgym_task_map = {"BoltTerrain": BoltTerrain, "BoltTerrainRender": BoltTerrainRender}
 
 def make(
     seed: int, 

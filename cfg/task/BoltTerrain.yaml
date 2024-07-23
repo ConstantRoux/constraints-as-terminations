@@ -49,16 +49,16 @@ env:
       gap: 0.0
 
   baseInitState:
-    pos: [0.0, 0.0, 0.3] # x,y,z [m]
-    rot: [0.0, 0.0, 0.0, 1.0] # x,y,z,w [quat]
+    pos: [0.0, 0.0, 0.4] # x,y,z [m]
+    rot: [0.0, 0.0, 0.0, 1] # x,y,z,w [quat]
     vLinear: [0.0, 0.0, 0.0] # x,y,z [m/s]
     vAngular: [0.0, 0.0, 0.0] # x,y,z [rad/s]
 
   randomCommandVelocityRanges:
     # train
     linear_x: [-1.0, 1.0] # min max [m/s]
-    linear_y: [-0.7, 0.7] # min max [m/s]
-    yaw: [-0.78, 0.78] # min max [rad/s]
+    linear_y: [-1.0, 1.0] # min max [m/s]
+    yaw: [-1.0, 1.0] # min max [rad/s]
 
   control:
     # PD Drive parameters:
@@ -71,15 +71,15 @@ env:
 
   defaultJointAngles: # = target angles when action = 0.0
     FL_HAA: 0.0 # [rad]
-    FL_HFE: 0.8 # [rad]
-    FL_KFE: -1.7 # [rad]
+    FL_HFE: 0.6 # [rad]
+    FL_KFE: -1.2 # [rad]
 
     FR_HAA: 0.0 # [rad]
-    FR_HFE: 0.8 # [rad]
-    FR_KFE: -1.7 # [rad]
+    FR_HFE: 0.6 # [rad]
+    FR_KFE: -1.2 # [rad]
 
   urdfAsset:
-    file: "bolt/bolt.urdf"
+    file: "bolt_description/urdf/bolt_description_isaac.urdf"
     baseName: base_link
     footName: FOOT
     shinName: LOWER
@@ -117,13 +117,13 @@ env:
     # Misc quantities for rewards
     linearVelocityXYRewardDelta: 0.25
     angularVelocityZRewardDelta: 0.25
-    feetAirTimeRewardTarget: 0.25
+    feetAirTimeRewardTarget: 0.30
 
     # Constraints
     enableConstraints: "cat"  # "none", "cat"
     constraints_CaT:
       survivalBonus: 0.0
-      feetAirTimeConstraint: 0.25
+      feetAirTimeConstraint: 0.30
       tauConstraint: 0.95
       minPConstraint: 0.0
       softPConstraint: 0.25
@@ -137,14 +137,14 @@ env:
       action_rate: 80.0
       base_orientation: 0.1
       foot_contact_force: 50.0
-      HFE: 1.3
-      HAA: 0.2
-      base_height_max: 100.0
+      HFE: 0.5
+      HAA: 0.3
+      base_height_min: 0.3
 
     # Other
     flatTerrainThreshold: 0.001
-    vel_deadzone: 0.1
-    base_height_target: 0.31
+    vel_deadzone: 0.2
+    base_height_target: 0.34
     gait_period: 0.3
 
     # observations

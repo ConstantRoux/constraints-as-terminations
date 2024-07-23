@@ -96,10 +96,11 @@ class BoltTerrain(VecTask):
         self.command_yaw_range = self.cfg["env"]["randomCommandVelocityRanges"]["yaw"]
         if self.cfg["env"]["onlyForwards"]:
             # Just going forwards at maximum velocity
+            self.command_x_range[1] = 0.0
             self.command_x_range[0] = self.command_x_range[1]
             for i in range(2):
-                self.command_y_range[i] = 0.
-                self.command_yaw_range[i] = 0.
+                self.command_y_range[i] = 0.0
+                self.command_yaw_range[i] = 0.0
 
         # Initial state of the robot base
         pos = self.cfg["env"]["baseInitState"]["pos"]
@@ -709,7 +710,8 @@ class BoltTerrain(VecTask):
         # Total reward, with clipping if < 0
         self.rew_buf = rew_lin_vel_xy + rew_ang_vel_z + rew_torque + rew_action_rate + rew_airTime + rew_foot2contact
         if self.useConstraints == "cat":
-            self.rew_buf = torch.clip(self.rew_buf * (1.0 - self.cstr_prob), min=0., max=None)
+            #self.rew_buf = torch.clip(self.rew_buf * (1.0 - self.cstr_prob), min=0., max=None)
+            self.rew_buf = torch.clip(self.rew_buf, min=0., max=None)
         else:
             self.rew_buf = torch.clip(self.rew_buf, min=0., max=None)
 
@@ -744,7 +746,7 @@ class BoltTerrain(VecTask):
             base_height = self.root_states[:, 2]
         else:
             base_height = torch.mean(self.root_states[:, 2].unsqueeze(1) - self.measured_heights, dim=1)
-        cstr_base_height_max = base_height - self.limits['base_height_max']
+        cstr_base_height_min = self.limits['base_height_min'] - base_height 
 
         # Action rate constraint (for command smoothness)
         cstr_action_rate = torch.abs(self.actions - self.last_actions[:, :, 0]) / self.dt - self.limits["action_rate"]
@@ -764,12 +766,15 @@ class BoltTerrain(VecTask):
         cstr_foot_stumble = torch.norm(self.contact_forces[:, self.grf_indices, :2], dim=2) - 4.0 * torch.abs(self.contact_forces[:, self.grf_indices, 2])
 
         # Constraint on the two front HFE joints
-        cstr_HFE = torch.abs(self.dof_pos[:, [1, 4]]) - self.limits["HFE"] # Only front legs
+        # cstr_HFE = torch.abs(self.dof_pos[:, [1, 4]]) - self.limits["HFE"] # Only front legs
 
         # Constraint to avoid having the robot upside-down
         cstr_upsidedown = self.projected_gravity[:, 2] > 0
 
         # ------------ Style constraints ----------------
+
+        # Constraint on the two front HFE joints
+        cstr_HFE = torch.abs(self.dof_pos[:, [1, 4]] - self.default_dof_pos[:, [1, 4]]) - self.limits["HFE"] # Only front legs
 
         # Hip constraint (style constraint on HAA joint)
         cstr_HAA = torch.abs(self.dof_pos[:, [0, 3]] - self.default_dof_pos[:, [0, 3]]) - self.limits["HAA"]
@@ -822,7 +827,6 @@ class BoltTerrain(VecTask):
         self.cstr_manager.add("torque", cstr_torque, max_p=soft_p)
         self.cstr_manager.add("joint_acc", cstr_joint_acc, max_p=soft_p)
         self.cstr_manager.add("joint_vel",  cstr_joint_vel, max_p=soft_p)
-        self.cstr_manager.add("base_height_max", cstr_base_height_max, max_p=soft_p)
         self.cstr_manager.add("action_rate",cstr_action_rate, max_p=soft_p)
         self.cstr_manager.add("HFE", cstr_HFE, max_p=soft_p)
         self.cstr_manager.add("HAA", cstr_HAA, max_p=soft_p)
@@ -832,16 +836,17 @@ class BoltTerrain(VecTask):
         self.cstr_manager.add("base_contact", cstr_base_contact, max_p=1.0)
         self.cstr_manager.add("foot_contact", cstr_foot_contact, max_p=1.0)
         self.cstr_manager.add("upsidedown", cstr_upsidedown, max_p=1.0)
+        # self.cstr_manager.add("base_height_min", cstr_base_height_min, max_p=1.0)
 
         # Style constraints
         self.cstr_manager.add("base_ori", cstr_base_orientation, max_p=soft_p)
+        self.cstr_manager.add("1footcontact", cstr_1footcontact, max_p=soft_p)
         self.cstr_manager.add("air_time", cstr_air_time, max_p=soft_p)
         # self.cstr_manager.add("no_move", cstr_nomove)
-        self.cstr_manager.add("1footcontact", cstr_1footcontact, max_p=soft_p)
 
         # Tracking constraints
-        self.cstr_manager.add("lin_vel",cstr_lin_vel, max_p=soft_p)
-        self.cstr_manager.add("ang_vel", cstr_ang_vel, max_p=soft_p)
+        # self.cstr_manager.add("lin_vel",cstr_lin_vel, max_p=soft_p)
+        # self.cstr_manager.add("ang_vel", cstr_ang_vel, max_p=soft_p)
 
         self.cstr_manager.log_all(self.episode_sums)
 
@@ -1010,7 +1015,7 @@ class BoltTerrain(VecTask):
         
         self.actions = actions.clone().to(self.device)
         # If you want constant actions for debug purpose:
-        # self.actions[:] = torch.tensor([0.2,  0.1679 , -0.37505, -0.2,  0.1679 , -0.37505, 0.2,  -0.1679 , 0.37505, -0.2,  -0.1679 , 0.37505])
+        # self.actions[:] = torch.tensor([0, 0, 0, 0, 0, 0])
 
         # There is self.decimation steps of simulation between each call to the policy
         for i in range(self.decimation):
@@ -1366,7 +1371,6 @@ class BoltTerrain(VecTask):
         filling = '' if len(lines_A) > len(lines_B) else ' ' * (max_width_A)
         for line_A, line_B in itertools.zip_longest(lines_A, lines_B, fillvalue=filling):
             print(f"{line_A}{' ' * padding}{line_B}")
-
 
     def plot_logged_quantities(self):
         """Display a few graphs to analyze results"""
