@@ -32,7 +32,7 @@ import os
 import random
 
 import numpy as np
-
+import time
 import isaacgym
 from isaacgymenvs.pbt.pbt import PbtAlgoObserver, initial_pbt_check
 from omegaconf import DictConfig, OmegaConf
@@ -98,4 +98,6 @@ def launch_rlg_hydra(cfg: DictConfig):
             raise NotImplementedError
 
 if __name__ == "__main__":
+    elapsed_time = time.time()
     launch_rlg_hydra()
+    print("elapsed time:", time.time() - elapsed_time)
