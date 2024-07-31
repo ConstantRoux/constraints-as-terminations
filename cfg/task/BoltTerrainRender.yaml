@@ -8,8 +8,8 @@ env:
   numEnvs: ${resolve_default:4096,${...num_envs}}
   numActions: 6
   numLatent: 0 # (8, 3, 3)
-  numHistorySamples: 1 # t-1, t-4, t-7
-  numHistoryStep: 0 # t-1 -> t-4 -> t-7
+  numHistorySamples: 10 # t-1, t-4, t-7
+  numHistoryStep: 2 # t-1 -> t-4 -> t-7
   envSpacing: 3. # [m]
   enableDebugVis: False
   enableDebugPlots: False
@@ -54,6 +54,11 @@ env:
     rot: [0.0, 0.0, 0.0, 1.0] # x,y,z,w [quat]
     vLinear: [0.0, 0.0, 0.0] # x,y,z [m/s]
     vAngular: [0.0, 0.0, 0.0] # x,y,z [rad/s]
+
+  inertialMassNoiseFactor: 0.15
+  inertialMatrixNoiseFactor: 0.0
+  inertialCoMNoiseFactor: 0.15
+  jointBiasNoise: 0.05
 
   randomCommandVelocityRanges:
     # train
@@ -118,7 +123,7 @@ env:
     # Misc quantities for rewards
     linearVelocityXYRewardDelta: 0.25
     angularVelocityZRewardDelta: 0.25
-    feetAirTimeRewardTarget: 0.25
+    feetAirTimeRewardTarget: 0.30
 
     # Constraints
     enableConstraints: "cat"  # "none", "cat"
@@ -137,7 +142,7 @@ env:
       vel: 16.0
       action_rate: 80.0
       base_orientation: 0.1
-      foot_contact_force: 50.0
+      foot_contact_force: 25.0
       HFE: 1.3
       HAA: 0.2
       base_height_max: 100.0
@@ -173,12 +178,19 @@ env:
     # noise
     addNoise: true
     noiseLevel: 1.0 # scales other values
-    dofPositionNoise: 0.01
-    dofVelocityNoise: 0.2
+    dofPositionNoise: 0.05
+    dofVelocityNoise: 0.05
     linearVelocityNoise: 0.0
-    angularVelocityNoise: 0.001
+    angularVelocityNoise: 0.01
     gravityNoise: 0.05
     heightMeasurementNoise: 0.01
+
+    initDofPositionFactor: 0.05
+    initDofVelocityNoise: 0.05
+    initYawNoise: 3.14
+    initPitchNoise: 0.3
+    initRollNoise: 0.3
+    initXYoffset: 0.05
 
     # friction randomization
     randomizeFriction: true
@@ -199,14 +211,6 @@ env:
 
   # set to True if you use camera sensors in the environment
   enableCameraSensors: True
-  depth:
-    use_depth: False
-    position: [0.21, 0, 0.03] # [0.21, 0, 0.03]
-    angle: [-5, 5]
-    update_interval: 5
-    image_size: [58, 87] # [48, 64]
-    depth_clip: 3.0
-    horizontal_fov: 87
 
 sim:
   dt: 0.005

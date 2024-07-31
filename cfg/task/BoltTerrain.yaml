@@ -7,8 +7,8 @@ env:
   numEnvs: ${resolve_default:4096,${...num_envs}}
   numActions: 6
   numLatent: 0 # (8, 3, 3)
-  numHistorySamples: 1 # t-1, t-4, t-7
-  numHistoryStep: 0 # t-1 -> t-4 -> t-7
+  numHistorySamples: 10 # t-1, t-4, t-7
+  numHistoryStep: 2 # t-1 -> t-4 -> t-7
   envSpacing: 3. # [m]
   enableDebugVis: False
   enableDebugPlots: False
@@ -53,12 +53,17 @@ env:
     rot: [0.0, 0.0, 0.0, 1] # x,y,z,w [quat]
     vLinear: [0.0, 0.0, 0.0] # x,y,z [m/s]
     vAngular: [0.0, 0.0, 0.0] # x,y,z [rad/s]
+  
+  inertialMassNoiseFactor: 0.15
+  inertialMatrixNoiseFactor: 0.0
+  inertialCoMNoiseFactor: 0.15
+  jointBiasNoise: 0.05
 
   randomCommandVelocityRanges:
     # train
-    linear_x: [-1.0, 1.0] # min max [m/s]
-    linear_y: [-1.0, 1.0] # min max [m/s]
-    yaw: [-1.0, 1.0] # min max [rad/s]
+    linear_x: [-0.5, 0.5] # min max [m/s]
+    linear_y: [-0.3, 0.3] # min max [m/s]
+    yaw: [-0.2, 0.2] # min max [rad/s]
 
   control:
     # PD Drive parameters:
@@ -135,10 +140,10 @@ env:
       acc: 800.0
       vel: 16.0
       action_rate: 80.0
-      base_orientation: 0.1
-      foot_contact_force: 50.0
-      HFE: 0.5
-      HAA: 0.3
+      base_orientation: 0.15
+      foot_contact_force: 25.0
+      HFE: 1000  # 0.5
+      HAA: 0.2  # 0.3
       base_height_min: 0.3
 
     # Other
@@ -172,12 +177,19 @@ env:
     # noise
     addNoise: true
     noiseLevel: 1.0 # scales other values
-    dofPositionNoise: 0.01
-    dofVelocityNoise: 0.2
+    dofPositionNoise: 0.05
+    dofVelocityNoise: 0.05
     linearVelocityNoise: 0.0
-    angularVelocityNoise: 0.001
+    angularVelocityNoise: 0.01
     gravityNoise: 0.05
     heightMeasurementNoise: 0.01
+
+    initDofPositionFactor: 0.05
+    initDofVelocityNoise: 0.05
+    initYawNoise: 3.14
+    initPitchNoise: 0.3
+    initRollNoise: 0.3
+    initXYoffset: 0.05
 
     # friction randomization
     randomizeFriction: true

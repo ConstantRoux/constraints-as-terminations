@@ -96,7 +96,7 @@ class BoltTerrain(VecTask):
         self.command_yaw_range = self.cfg["env"]["randomCommandVelocityRanges"]["yaw"]
         if self.cfg["env"]["onlyForwards"]:
             # Just going forwards at maximum velocity
-            self.command_x_range[1] = 0.0
+            self.command_x_range[1] = 0.5
             self.command_x_range[0] = self.command_x_range[1]
             for i in range(2):
                 self.command_y_range[i] = 0.0
@@ -237,6 +237,7 @@ class BoltTerrain(VecTask):
         self.filtered_contact_forces = torch.zeros((self.num_envs, len(self.feet_indices), 3, 5), dtype=torch.float, device=self.device, requires_grad=False)
         self.move_up_flag = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device, requires_grad=False)
         self.camera_pos = np.zeros(3)
+        self.dof_pos_bias = torch.zeros(self.num_envs, self.num_dof, dtype=torch.float, device=self.device, requires_grad=False)
 
         # Keeping the 6 last actions and joint states
         self.last_actions = torch.zeros(self.num_envs, self.num_actions, 6, dtype=torch.float, device=self.device, requires_grad=False)
@@ -417,6 +418,30 @@ class BoltTerrain(VecTask):
             self.gym.set_asset_rigid_shape_properties(self.bolt_asset, rigid_shape_prop)
             bolt_handle = self.gym.create_actor(env_handle, self.bolt_asset, start_pose, "bolt", i, 0, 0)
             self.gym.set_actor_dof_properties(env_handle, bolt_handle, dof_props)
+            
+            object_rb_props = self.gym.get_actor_rigid_body_properties(env_handle, bolt_handle)
+            for prop in object_rb_props:
+                mass_factor = np.random.uniform(low=1-self.cfg["env"]["inertialMassNoiseFactor"], high=1+self.cfg["env"]["inertialMassNoiseFactor"])
+                com_factor = np.random.uniform(low=1-self.cfg["env"]["inertialCoMNoiseFactor"], high=1+self.cfg["env"]["inertialCoMNoiseFactor"], size=3)
+                inertia_factor = np.random.uniform(low=1-self.cfg["env"]["inertialMatrixNoiseFactor"], high=1+self.cfg["env"]["inertialMatrixNoiseFactor"], size=6)
+
+                prop.mass *= mass_factor
+
+                prop.com.x *= com_factor[0]
+                prop.com.y *= com_factor[1]
+                prop.com.z *= com_factor[2]
+
+                prop.inertia.x.x *= inertia_factor[0] 
+                prop.inertia.x.y *= inertia_factor[1]  
+                prop.inertia.x.z *= inertia_factor[2]  
+                prop.inertia.y.x *= inertia_factor[1]  
+                prop.inertia.y.y *= inertia_factor[3]  
+                prop.inertia.y.z *= inertia_factor[4]  
+                prop.inertia.z.x *= inertia_factor[2]  
+                prop.inertia.z.y *= inertia_factor[4]  
+                prop.inertia.z.z *= inertia_factor[5]  
+            self.gym.set_actor_rigid_body_properties(env_handle, bolt_handle, object_rb_props)
+
             self.envs.append(env_handle)
             self.bolt_handles.append(bolt_handle)
 
@@ -553,6 +578,7 @@ class BoltTerrain(VecTask):
         # Add noise to observation sample
         if self.add_noise:
             obs_meas += (2 * torch.rand_like(obs_meas) - 1) * self.noise_scale_vec
+            obs_meas[:, 9:15] += self.dof_pos_bias[:, :]
 
         # Refresh history of observation for envs that have just been reset
         resetted = (self.progress_buf == 1)
@@ -570,7 +596,8 @@ class BoltTerrain(VecTask):
         for i in range(self.numHistorySamples):
             j = i * self.numHistoryStep * self.sampleObsSize
             self.obs_buf[:, i * self.sampleObsSize : (i+1) * self.sampleObsSize] = self.hist_obs_buf[:, j:(j + self.sampleObsSize)]
-
+        
+        
     # ------------ dim obs functions ----------------
     def dim_obs_base_lin_vel(self):
         """Dimension of base linear velocity observations."""
@@ -778,7 +805,7 @@ class BoltTerrain(VecTask):
 
         # Hip constraint (style constraint on HAA joint)
         cstr_HAA = torch.abs(self.dof_pos[:, [0, 3]] - self.default_dof_pos[:, [0, 3]]) - self.limits["HAA"]
-        cstr_HAA *= (torch.abs(self.commands[:, 1]) < 0.1).float().unsqueeze(1) # only constraint the hips when going straight forward
+        # cstr_HAA *= (torch.abs(self.commands[:, 1]) < 0.1).float().unsqueeze(1) # only constraint the hips when going straight forward
 
         # Base orientation constraint (style constraint on roll/pitch angles)
         cstr_base_orientation = torch.norm(self.projected_gravity[:, :2], dim=1) - self.limits["base_orientation"]
@@ -790,8 +817,8 @@ class BoltTerrain(VecTask):
         # cstr_nomove = (torch.abs(self.dof_vel) - 4.0) *(torch.norm(self.commands[:, :3], dim=1) < self.vel_deadzone).float().unsqueeze(1)
 
         # Constraint to have exactly 2 feet in contact with the ground at any time when walking (style constraint)
-        # cstr_1footcontact = torch.abs((self.contact_forces[:, self.grf_indices, 2] > 1.0).sum(1) - 1) * (torch.norm(self.commands[:, :3], dim=1) > 0.5).float()
-        cstr_1footcontact = torch.abs((self.contact_forces[:, self.grf_indices, 2] > 1.0).sum(1) - 1).float()
+        cstr_1footcontact = torch.maximum(torch.abs(1 - (self.contact_forces[:, self.grf_indices, 2] > 1.0).sum(1)), torch.tensor(0)).float()
+        # cstr_1footcontact = torch.abs((self.contact_forces[:, self.grf_indices, 2] > 1.0).sum(1) - 1).float()
 
         # Apply aesthetics constraints only on flat terrains
         cstr_HAA *= self.is_flat_terrain.unsqueeze(1)
@@ -870,20 +897,24 @@ class BoltTerrain(VecTask):
     ####################
     # Other
     ####################
+    import torch
 
     def reset_idx(self, env_ids):
         """Reset environements when episodes have terminated."""
 
         # Randomize initial joint positions and velocities, as well as (x, y) position and yaw orientation of the base
-        positions_offset = torch_rand_float(0.95, 1.05, (len(env_ids), self.num_dof), device=self.device)  # Multiplicative factor
-        velocities = torch_rand_float(-0.05, 0.05, (len(env_ids), self.num_dof), device=self.device)
-        yaw_offset = torch_rand_float(-1.57, 1.57, (len(env_ids), 1), device=self.device)  # Already divided by 2 for next line
-        xy_offset = torch_rand_float(-0.05, 0.05, (len(env_ids), 2), device=self.device)
-        quat_offset = torch.cat((torch.zeros((len(env_ids), 2), device=self.device), torch.sin(yaw_offset), torch.cos(yaw_offset)), dim=1)
+        positions_offset = torch_rand_float(1 - self.cfg["env"]["learn"]["initDofPositionFactor"], 1 + self.cfg["env"]["learn"]["initDofPositionFactor"], (len(env_ids), self.num_dof), device=self.device)  # Multiplicative factor
+        velocities = torch_rand_float(-self.cfg["env"]["learn"]["initDofVelocityNoise"], self.cfg["env"]["learn"]["initDofVelocityNoise"], (len(env_ids), self.num_dof), device=self.device)
+        yaw_offset = torch_rand_float(-self.cfg["env"]["learn"]["initYawNoise"], self.cfg["env"]["learn"]["initYawNoise"], (len(env_ids), 1), device=self.device)  # Already divided by 2 for next line
+        pitch_offset = torch_rand_float(-self.cfg["env"]["learn"]["initPitchNoise"], self.cfg["env"]["learn"]["initPitchNoise"], (len(env_ids), 1), device=self.device)  # Already divided by 2 for next line
+        roll_offset = torch_rand_float(-self.cfg["env"]["learn"]["initRollNoise"], self.cfg["env"]["learn"]["initRollNoise"], (len(env_ids), 1), device=self.device)  # Already divided by 2 for next line
+        xy_offset = torch_rand_float(-self.cfg["env"]["learn"]["initXYoffset"], self.cfg["env"]["learn"]["initXYoffset"], (len(env_ids), 2), device=self.device)
 
         self.dof_pos[env_ids] = self.default_dof_pos[env_ids] * positions_offset
         self.last_dof_pos[env_ids] = torch.unsqueeze(self.dof_pos[env_ids], 2)
         self.dof_vel[env_ids] = velocities
+        
+        self.dof_pos_bias[env_ids] = torch_rand_float(-self.cfg["env"]["jointBiasNoise"], self.cfg["env"]["jointBiasNoise"], (len(env_ids), self.num_dof), device=self.device) 
 
         # Set new root states
         if self.custom_origins:
@@ -891,9 +922,24 @@ class BoltTerrain(VecTask):
             self.root_states[env_ids] = self.base_init_state
             self.root_states[env_ids, :3] += self.env_origins[env_ids]
             self.root_states[env_ids, :2] += xy_offset
-            self.root_states[env_ids, 3:7] = quat_offset
+            self.root_states[env_ids, 3:7] =    torch.cat((torch.sin(roll_offset/2) * torch.cos(pitch_offset/2) * torch.cos(yaw_offset/2) - torch.cos(roll_offset/2) * torch.sin(pitch_offset/2) * torch.sin(yaw_offset/2),
+                                                torch.cos(roll_offset/2) * torch.sin(pitch_offset/2) * torch.cos(yaw_offset/2) + torch.sin(roll_offset/2) * torch.cos(pitch_offset/2) * torch.sin(yaw_offset/2),
+                                                torch.cos(roll_offset/2) * torch.cos(pitch_offset/2) * torch.sin(yaw_offset/2) - torch.sin(roll_offset/2) * torch.sin(pitch_offset/2) * torch.cos(yaw_offset/2),
+                                                torch.cos(roll_offset/2) * torch.cos(pitch_offset/2) * torch.cos(yaw_offset/2) + torch.sin(roll_offset/2) * torch.sin(pitch_offset/2) * torch.sin(yaw_offset/2)), dim=1)
+
+
         else:
             self.root_states[env_ids] = self.base_init_state
+            self.root_states[env_ids, :3] += self.env_origins[env_ids]
+            self.root_states[env_ids, :2] += xy_offset
+            self.root_states[env_ids, 3:7] =    torch.cat((torch.sin(roll_offset/2) * torch.cos(pitch_offset/2) * torch.cos(yaw_offset/2) - torch.cos(roll_offset/2) * torch.sin(pitch_offset/2) * torch.sin(yaw_offset/2),
+                                                torch.cos(roll_offset/2) * torch.sin(pitch_offset/2) * torch.cos(yaw_offset/2) + torch.sin(roll_offset/2) * torch.cos(pitch_offset/2) * torch.sin(yaw_offset/2),
+                                                torch.cos(roll_offset/2) * torch.cos(pitch_offset/2) * torch.sin(yaw_offset/2) - torch.sin(roll_offset/2) * torch.sin(pitch_offset/2) * torch.cos(yaw_offset/2),
+                                                torch.cos(roll_offset/2) * torch.cos(pitch_offset/2) * torch.cos(yaw_offset/2) + torch.sin(roll_offset/2) * torch.sin(pitch_offset/2) * torch.sin(yaw_offset/2)), dim=1)
+
+
+        # quat_offset = torch.cat((torch.zeros((len(env_ids), 2), device=self.device), torch.sin(yaw_offset), torch.cos(yaw_offset)), dim=1)
+
 
         # Apply new root states to simulation
         env_ids_int32 = env_ids.to(dtype=torch.int32)
@@ -1007,19 +1053,17 @@ class BoltTerrain(VecTask):
         # (1 / p) policy steps for X seconds, and the probability of having no swap at all is (1 - p)**(1 / p) = 0.37
         # The mean number of swaps for (1 / p) steps with probability p is 1.
         push_idx = torch.bernoulli(torch.full((self.num_envs, ), p_push, device=self.device)).nonzero(as_tuple=False).flatten()
-        self.root_states[push_idx, 7:9] = torch_rand_float(-0.5, 0.5, (len(push_idx), 2), device=self.device) # lin vel x/y
+        self.root_states[push_idx, 7:9] = torch_rand_float(-1, 1, (len(push_idx), 2), device=self.device) # lin vel x/y
         self.gym.set_actor_root_state_tensor(self.sim, gymtorch.unwrap_tensor(self.root_states))
 
     def pre_physics_step(self, actions):
         """Computing command torques with the PD controller and running the simulation steps between each call of the policy."""
-        
         self.actions = actions.clone().to(self.device)
         # If you want constant actions for debug purpose:
         # self.actions[:] = torch.tensor([0, 0, 0, 0, 0, 0])
 
         # There is self.decimation steps of simulation between each call to the policy
         for i in range(self.decimation):
-
             torques = torch.clip(
                 (
                     self.Kp
@@ -1054,6 +1098,7 @@ class BoltTerrain(VecTask):
             self.gym.set_dof_actuation_force_tensor(self.sim, gymtorch.unwrap_tensor(torques))
             self.torques = torques.view(self.torques.shape)
             self.gym.simulate(self.sim)
+
             if self.device == 'cpu':
                 self.gym.fetch_results(self.sim, True)
             self.gym.refresh_dof_state_tensor(self.sim)
@@ -1061,7 +1106,7 @@ class BoltTerrain(VecTask):
 
             # Gathering feet contact forces over several steps for averaging purpose (to avoid simulation glitches)
             self.filtered_contact_forces[:, :, :, 1:] = self.filtered_contact_forces[:, :, :, :-1]
-            self.filtered_contact_forces[:, :, :, 0] = self.contact_forces[:, self.grf_indices, :]         
+            self.filtered_contact_forces[:, :, :, 0] = self.contact_forces[:, self.grf_indices, :]       
 
             # Logging feet positions and velocities for plotting purpose
             if self.debug_plots:
