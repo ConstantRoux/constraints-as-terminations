@@ -9,7 +9,7 @@ env:
   numActions: 6
   numLatent: 0 # (8, 3, 3)
   numHistorySamples: 10 # t-1, t-4, t-7
-  numHistoryStep: 2 # t-1 -> t-4 -> t-7
+  numHistoryStep: 3 # t-1 -> t-4 -> t-7
   envSpacing: 3. # [m]
   enableDebugVis: False
   enableDebugPlots: False
@@ -55,10 +55,10 @@ env:
     vLinear: [0.0, 0.0, 0.0] # x,y,z [m/s]
     vAngular: [0.0, 0.0, 0.0] # x,y,z [rad/s]
 
-  inertialMassNoiseFactor: 0.15
+  inertialMassNoiseFactor: 0.25
   inertialMatrixNoiseFactor: 0.0
-  inertialCoMNoiseFactor: 0.15
-  jointBiasNoise: 0.05
+  inertialCoMNoiseFactor: 0.25
+  jointBiasNoise: 0.08
 
   randomCommandVelocityRanges:
     # train
@@ -85,11 +85,21 @@ env:
     FR_KFE: -1.2 # [rad]
 
   urdfAsset:
-    file: "bolt_description/urdf/bolt_description_isaac.urdf"
+    file: "onshape_bolt_description/urdf/bolt_description_isaac.urdf"
     baseName: base_link
     footName: FOOT
     shinName: LOWER
     kneeName: UPPER
+    imuTF:
+      p:
+        x: 0.00213
+        y: 0
+        z: -0.0115
+      r:
+        x: 0
+        y: 0
+        z: 0
+        w: 1
     collapseFixedJoints: True
     fixBaseLink: false
     defaultDofDriveMode: 4 # see GymDofDriveModeFlags (0 is none, 1 is pos tgt, 2 is vel tgt, 4 effort)
@@ -141,16 +151,16 @@ env:
       acc: 800.0
       vel: 16.0
       action_rate: 80.0
-      base_orientation: 0.1
+      base_orientation: 0.25
       foot_contact_force: 25.0
-      HFE: 1.3
-      HAA: 0.2
+      HFE: 0.5
+      HAA: 0.3
       base_height_max: 100.0
 
     # Other
     flatTerrainThreshold: 0.001
-    vel_deadzone: 0.1
-    base_height_target: 0.31
+    vel_deadzone: 0.2
+    base_height_target: 0.34
     gait_period: 0.3
 
     # observations
@@ -182,6 +192,7 @@ env:
     dofVelocityNoise: 0.05
     linearVelocityNoise: 0.0
     angularVelocityNoise: 0.01
+    linearAccelerationNoise: 0.01
     gravityNoise: 0.05
     heightMeasurementNoise: 0.01
 
@@ -194,7 +205,7 @@ env:
 
     # friction randomization
     randomizeFriction: true
-    frictionRange: [0.5, 1.25]
+    frictionRange: [0.25, 1.5]
 
     # random pushes during training
     pushRobots: true

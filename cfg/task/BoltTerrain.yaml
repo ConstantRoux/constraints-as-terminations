@@ -8,7 +8,7 @@ env:
   numActions: 6
   numLatent: 0 # (8, 3, 3)
   numHistorySamples: 10 # t-1, t-4, t-7
-  numHistoryStep: 2 # t-1 -> t-4 -> t-7
+  numHistoryStep: 3 # t-1 -> t-4 -> t-7
   envSpacing: 3. # [m]
   enableDebugVis: False
   enableDebugPlots: False
@@ -54,9 +54,9 @@ env:
     vLinear: [0.0, 0.0, 0.0] # x,y,z [m/s]
     vAngular: [0.0, 0.0, 0.0] # x,y,z [rad/s]
   
-  inertialMassNoiseFactor: 0.15
+  inertialMassNoiseFactor: 0.0
   inertialMatrixNoiseFactor: 0.0
-  inertialCoMNoiseFactor: 0.15
+  inertialCoMNoiseFactor: 0.0
   jointBiasNoise: 0.05
 
   randomCommandVelocityRanges:
@@ -89,6 +89,16 @@ env:
     footName: FOOT
     shinName: LOWER
     kneeName: UPPER
+    imuTF:   
+      p:
+        x: 0.00213
+        y: 0
+        z: -0.0115
+      r:
+        x: 0
+        y: 0
+        z: 0
+        w: 1
     collapseFixedJoints: True
     fixBaseLink: false
     defaultDofDriveMode: 4 # see GymDofDriveModeFlags (0 is none, 1 is pos tgt, 2 is vel tgt, 4 effort)
@@ -128,7 +138,7 @@ env:
     enableConstraints: "cat"  # "none", "cat"
     constraints_CaT:
       survivalBonus: 0.0
-      feetAirTimeConstraint: 0.30
+      feetAirTimeConstraint: 0.35
       tauConstraint: 0.95
       minPConstraint: 0.0
       softPConstraint: 0.25
@@ -140,11 +150,11 @@ env:
       acc: 800.0
       vel: 16.0
       action_rate: 80.0
-      base_orientation: 0.15
+      base_orientation: 0.3
       foot_contact_force: 25.0
-      HFE: 1000  # 0.5
-      HAA: 0.2  # 0.3
-      base_height_min: 0.3
+      HFE: 0.5
+      HAA: 0.3
+      base_height_min: 100
 
     # Other
     flatTerrainThreshold: 0.001
@@ -177,15 +187,16 @@ env:
     # noise
     addNoise: true
     noiseLevel: 1.0 # scales other values
-    dofPositionNoise: 0.05
-    dofVelocityNoise: 0.05
+    dofPositionNoise: 0.03
+    dofVelocityNoise: 0.03
     linearVelocityNoise: 0.0
-    angularVelocityNoise: 0.01
-    gravityNoise: 0.05
+    angularVelocityNoise: 0.002
+    linearAccelerationNoise: 0.01
+    gravityNoise: 0.01
     heightMeasurementNoise: 0.01
 
-    initDofPositionFactor: 0.05
-    initDofVelocityNoise: 0.05
+    initDofPositionFactor: 0.03
+    initDofVelocityNoise: 0.03
     initYawNoise: 3.14
     initPitchNoise: 0.3
     initRollNoise: 0.3
@@ -193,7 +204,7 @@ env:
 
     # friction randomization
     randomizeFriction: true
-    frictionRange: [0.5, 1.25]
+    frictionRange: [0.25, 1.5]
 
     # random pushes during training
     pushRobots: true
