@@ -381,8 +381,9 @@ class BoltTerrain(VecTask):
         dof_props["armature"].fill(self.cfg["env"]["urdfAsset"]["armature"])
 
         # Add a pseudo-Inertia Measurement Unit sensor through the use of a force sensor on the base
-        # imu_pose = gymapi.Transform()
-        # self.gym.create_asset_force_sensor(self.bolt_asset, self.base_index, imu_pose)
+        imu_pose = gymapi.Transform(p=gymapi.Vec3(x=self.cfg["env"]["urdfAsset"]["imuTF"]["p"]["x"], y=self.cfg["env"]["urdfAsset"]["imuTF"]["p"]["y"], z=self.cfg["env"]["urdfAsset"]["imuTF"]["p"]["z"]),
+                                    r=gymapi.Quat(x=self.cfg["env"]["urdfAsset"]["imuTF"]["r"]["x"], y=self.cfg["env"]["urdfAsset"]["imuTF"]["r"]["y"], z=self.cfg["env"]["urdfAsset"]["imuTF"]["r"]["z"], w=self.cfg["env"]["urdfAsset"]["imuTF"]["r"]["w"]))
+        self.gym.create_asset_force_sensor(self.bolt_asset, self.base_index, imu_pose)
 
         # Gather env origins and spread the robots over the whole terrain
         # The terrain is divided into rows (levels) and columns (types), each cell being a potential spawn location
@@ -445,8 +446,9 @@ class BoltTerrain(VecTask):
             self.envs.append(env_handle)
             self.bolt_handles.append(bolt_handle)
 
-        # Gather base, knee, shin and feet indices based on their name
-        self.base_index = self.gym.find_actor_rigid_body_handle(self.envs[0], self.bolt_handles[0], self.cfg["env"]["urdfAsset"]["baseName"])
+        # Gather base, knee, shin, feet and imu indices based on their name
+        self.base_index = self.gym.find_actor_rigid_body_handle(self.envs[0], self.bolt_handles[0], self.cfg["env"]["urdfAsset"]["baseName"])        
+
         for i in range(len(knee_names)):
             self.knee_indices[i] = self.gym.find_actor_rigid_body_handle(self.envs[0], self.bolt_handles[0], knee_names[i])
         if not self.cfg["env"]["urdfAsset"]["collapseFixedJoints"]:
@@ -665,6 +667,7 @@ class BoltTerrain(VecTask):
         """Observe imu acceleration through force readings on the base.
         force_sensor stores net forces, that are the sum of external forces, contact forces and internal forces.
         A body resting on the ground will have a net force of zero."""
+        # print(self.force_sensor[0, :3] / self.base_mass * self.imu_scale)
         return self.force_sensor[:, :3] / self.base_mass * self.imu_scale
 
     # ------------ noise obs functions ----------------
@@ -705,7 +708,8 @@ class BoltTerrain(VecTask):
 
     def noise_imu(self):
         """Noise for IMU readings."""
-        return torch.zeros(self.dim_obs_imu(), dtype=torch.float, device=self.device, requires_grad=False)
+        return self.cfg["env"]["learn"]["linearAccelerationNoise"] * self.imu_scale * torch.ones(self.dim_obs_imu(), dtype=torch.float, device=self.device, requires_grad=False)
+        # return torch.zeros(self.dim_obs_imu(), dtype=torch.float, device=self.device, requires_grad=False)
 
     ####################
     # Rewards
@@ -862,6 +866,7 @@ class BoltTerrain(VecTask):
         self.cstr_manager.add("knee_contact", cstr_knee_contact, max_p=1.0)
         self.cstr_manager.add("base_contact", cstr_base_contact, max_p=1.0)
         self.cstr_manager.add("foot_contact", cstr_foot_contact, max_p=1.0)
+        self.cstr_manager.add("foot_stumble", cstr_foot_stumble, max_p=1.0)
         self.cstr_manager.add("upsidedown", cstr_upsidedown, max_p=1.0)
         # self.cstr_manager.add("base_height_min", cstr_base_height_min, max_p=1.0)
 
