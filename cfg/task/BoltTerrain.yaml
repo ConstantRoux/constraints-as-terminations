@@ -1,17 +1,15 @@
 # used to create the object
 name: BoltTerrain
-
+video_save_path: 'video.mp4'
 physics_engine: "physx"
 
 env:
   numEnvs: ${resolve_default:4096,${...num_envs}}
   numActions: 6
   numLatent: 0 # (8, 3, 3)
-  numHistorySamples: 10 # t-1, t-4, t-7
-  numHistoryStep: 3 # t-1 -> t-4 -> t-7
+  numHistorySamples: 1 # t-1, t-4, t-7
+  numHistoryStep: 1 # t-1 -> t-4 -> t-7
   envSpacing: 3. # [m]
-  enableDebugVis: False
-  enableDebugPlots: False
   enableJoystick: False
   onlyForwards: False
   startAtLevel: -1
@@ -38,14 +36,14 @@ env:
       pyramid_stairs_upwards: 0.0
       pyramid_stairs_downwards: 0.0
       pyramid_stairs_downwards_small: 0.0
-      discrete_obstacles: 0.35
+      discrete_obstacles: 0.0
       stepping_stones: 0.0
-      random_uniform: 0.0
+      random_uniform: 1.0
       flat: 0.0
-      rough_sloped_upwards: 0.05
-      rough_sloped_downwards: 0.05
-      rough_stairs_upwards: 0.2
-      rough_stairs_downwards: 0.35
+      rough_sloped_upwards: 0.00
+      rough_sloped_downwards: 0.00
+      rough_stairs_upwards: 0.0
+      rough_stairs_downwards: 0.0
       gap: 0.0
 
   baseInitState:
@@ -54,16 +52,11 @@ env:
     vLinear: [0.0, 0.0, 0.0] # x,y,z [m/s]
     vAngular: [0.0, 0.0, 0.0] # x,y,z [rad/s]
   
-  inertialMassNoiseFactor: 0.0
-  inertialMatrixNoiseFactor: 0.0
-  inertialCoMNoiseFactor: 0.0
-  jointBiasNoise: 0.05
-
   randomCommandVelocityRanges:
     # train
-    linear_x: [-0.5, 0.5] # min max [m/s]
-    linear_y: [-0.3, 0.3] # min max [m/s]
-    yaw: [-0.2, 0.2] # min max [rad/s]
+    linear_x: [-0.25, 0.25] # min max [m/s]
+    linear_y: [-0.25, 0.25] # min max [m/s]
+    yaw: [-0.0, 0.0] # min max [rad/s]
 
   control:
     # PD Drive parameters:
@@ -76,20 +69,20 @@ env:
 
   defaultJointAngles: # = target angles when action = 0.0
     FL_HAA: 0.0 # [rad]
-    FL_HFE: 0.6 # [rad]
-    FL_KFE: -1.2 # [rad]
+    FL_HFE: 0.916 # [rad]
+    FL_KFE: -1.616 # [rad]
 
     FR_HAA: 0.0 # [rad]
-    FR_HFE: 0.6 # [rad]
-    FR_KFE: -1.2 # [rad]
+    FR_HFE: 0.916 # [rad]
+    FR_KFE: -1.616 # [rad]
 
   urdfAsset:
-    file: "bolt_description/urdf/bolt_description_isaac.urdf"
+    file: "bolt_description/urdf/bolt_description.urdf"
     baseName: base_link
     footName: FOOT
     shinName: LOWER
     kneeName: UPPER
-    imuTF:   
+    imuTF:  # TODO croux 
       p:
         x: 0.00213
         y: 0
@@ -107,30 +100,24 @@ env:
 
   learn:
     allowShinContacts: True
-    allowKneeContacts: false
+    allowKneeContacts: False
   
     # Scales of rewards
     rewMult: 1.0
     terminalReward: 0.0
+    linearPositionXYRewardScale: 0.0
     linearVelocityXYRewardScale: 1.0
-    linearVelocityZRewardScale: -0.0
-    angularVelocityXYRewardScale: -0.0
+    angularPositionZRewardScale: 0.0
     angularVelocityZRewardScale: 0.5
-    orientationRewardScale: -0.0
     torqueRewardScale: -0.0
-    jointAccRewardScale: -0.0
-    baseHeightRewardScale: 0.0
     feetAirTimeRewardScale: 0.0 # 3.0 (as reward)
-    kneeCollisionRewardScale: -0.0
-    feetStumbleRewardScale: -0.0
     actionRateRewardScale: -0.0
-    dofPosRewardScale: 0.0
-    dofVelLimitRewardScale: 0
     footTwoContactRewardScale: 0.0 # 1.0 (as reward)
-    hipRewardScale: -0.0
 
     # Misc quantities for rewards
+    linearPositionXYRewardDelta: 0.25
     linearVelocityXYRewardDelta: 0.25
+    angularPositionZRewardDelta: 0.25
     angularVelocityZRewardDelta: 0.25
     feetAirTimeRewardTarget: 0.30
 
@@ -138,19 +125,20 @@ env:
     enableConstraints: "cat"  # "none", "cat"
     constraints_CaT:
       survivalBonus: 0.0
-      feetAirTimeConstraint: 0.35
+      feetAirTimeConstraint: 0.2
       tauConstraint: 0.95
       minPConstraint: 0.0
       softPConstraint: 0.25
       useSoftPCurriculum: True
-      trackingConstraint: 1000.0
+      linTrackingConstraint: 1000
+      angTrackingConstraint: 1000
 
     limits:
       torque: 3.0
       acc: 800.0
       vel: 16.0
-      action_rate: 80.0
-      base_orientation: 0.3
+      action_rate: 100.0
+      base_orientation: 0.2
       foot_contact_force: 25.0
       HFE: 0.5
       HAA: 0.3
@@ -158,7 +146,7 @@ env:
 
     # Other
     flatTerrainThreshold: 0.001
-    vel_deadzone: 0.2
+    vel_deadzone: 0.01
     base_height_target: 0.34
     gait_period: 0.3
 
@@ -171,6 +159,8 @@ env:
       heights: false
       phases: false
       imu: false
+      base_lin_pos: false
+      base_ang_pos: false
     measured_points_step: 0.08
     measured_points_x: [-3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
     measured_points_y: [-5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5]
@@ -183,30 +173,58 @@ env:
     dofVelocityScale: 0.05
     heightMeasurementScale: 5.0
     imuAccelerationScale: 0.1
+    linearPositionScale: 1.0
+    angularPositionScale: 1.0
 
     # noise
     addNoise: true
-    noiseLevel: 1.0 # scales other values
-    dofPositionNoise: 0.03
-    dofVelocityNoise: 0.03
-    linearVelocityNoise: 0.0
-    angularVelocityNoise: 0.002
-    linearAccelerationNoise: 0.01
-    gravityNoise: 0.01
+    noiseLevel: 1.0
+
+    ## JOINTS
+    ### dof position randomization
+    initDofPositionOffset: 0.5
+    dofPositionNoise: [0.08, 0.02]
+
+    ### dof velocity randomization
+    initDofVelocityOffset: 0.1
+    dofVelocityNoise: [0.01, 0.2]
+
+    ## BASE
+    ### base linear position randomization
+    initXYoffset: 1.0
+    linearPositionNoise: [0.01, 0.005]  
+
+    ### base angular position randomization  
+    initYawOffset: 0.1
+    initPitchOffset: 0.1
+    initRollOffset: 0.1
+    angularPositionNoise: [0.0, 0.0]
+
+    ### base linear velocity randomization
+    linearVelocityNoise: [0.0, 0.0]
+
+    ### base angular velocity randomization
+    angularVelocityNoise: [0.1, 0.1]
+
+    ### Accelerometer
+    linearAccelerationNoise: [0.0, 0.0]
+    gravityNoise: [0.1, 0.05]
+
+    ## INERTIA
+    inertialMassNoise: 0.1
+    inertialCoMNoise: 0.1
+    inertialMatrixNoise: 0.1
+
+    ## LATENCY
+
+    ## OTHER
     heightMeasurementNoise: 0.01
 
-    initDofPositionFactor: 0.03
-    initDofVelocityNoise: 0.03
-    initYawNoise: 3.14
-    initPitchNoise: 0.3
-    initRollNoise: 0.3
-    initXYoffset: 0.05
-
-    # friction randomization
+    ## FRICTION
     randomizeFriction: true
-    frictionRange: [0.25, 1.5]
+    frictionRange: [-0.2, 1.5]
 
-    # random pushes during training
+    ## PUSHES
     pushRobots: true
     pushInterval_s: 8
 

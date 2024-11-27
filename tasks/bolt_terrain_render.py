@@ -17,13 +17,13 @@ class BoltTerrainRender(BoltTerrain):
 
     def create_sim(self):
         super().create_sim()
-        self.camera_height = 360 #540
-        self.camera_width = 480 #960
+        self.camera_height = 540 #540
+        self.camera_width = 960 #960
 
         self.camera_offsets = [
                 [0.3, -0.3, 0.1, 0.0, 0.0, -0.1],
                 [0.4, 0.0, -0.05, 0.0, 0.0, -0.05],
-                [0.0, 0.5, -0.05, 0.0, 0.0, -0.05],
+                [0.0, -1.0, -0.1, 0.0, 0.0, -0.1],
                 [0.3, 0.3, 1.0, 0.0, 0.0, 0.0],
         ]
         self.camera_handles = []
@@ -70,8 +70,6 @@ class BoltTerrainRender(BoltTerrain):
         self.reset_env_buf = self.cstr_prob
 
         self.reset_env_buf = timeout | cstr_upsidedown
-
-
 
     def post_physics_step(self):
         super().post_physics_step()
